@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "weather": {
+      "type": "local",
+      "enabled": true,
+      "command": ["node", "dist/index.js"]
+    }
+  }
+}
