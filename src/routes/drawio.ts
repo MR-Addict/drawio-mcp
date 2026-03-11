@@ -26,25 +26,15 @@ app.post("/", async (c) => {
   return c.json({ success: true });
 });
 
-// POST /refresh - Force update notification from file content
-app.post("/refresh", async (c) => {
-  const content = await readDiagram();
-
-  // Notify listeners
-  eventEmitter.emit("update", content);
-
-  return c.json({ success: true });
-});
-
 // GET /events - SSE
 app.get("/events", async (c) => {
   return streamSSE(c, async (stream) => {
-    const onUpdate = async (content: string) => {
-      await stream.writeSSE({
-        data: content,
-        event: "update",
-      });
-    };
+    // Function to send updates to the client
+    const onUpdate = (content: string) => stream.writeSSE({ data: content, event: "update" });
+
+    // Send initial state immediately upon connection
+    const initialContent = await readDiagram();
+    await onUpdate(initialContent);
 
     // Listen for updates
     eventEmitter.on("update", onUpdate);

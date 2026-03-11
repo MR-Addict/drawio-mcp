@@ -7,11 +7,7 @@ export function registerNotifyTool(server: McpServer) {
   // Register tool
   server.registerTool(
     "notify_drawio_update",
-    {
-      description:
-        "Notify that the drawio file has been updated by the agent. This should be called after the agent has modified the 'data/diagram.drawio' file directly.",
-      inputSchema: {},
-    },
+    { description: "Notify that the drawio file has been updated by the agent." },
     async () => {
       try {
         const content = await readDiagram();

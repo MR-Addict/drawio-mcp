@@ -1,10 +1,13 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 
 import drawioRouter from "./routes/drawio.js";
 
 export function runAppServer() {
   const app = new Hono();
+
+  app.use("/*", cors());
 
   // Basic route
   app.get("/", (c) => c.text("Access /drawio to get the diagram."));
