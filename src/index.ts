@@ -1,55 +1,30 @@
-import { Hono } from "hono";
-import { serve } from "@hono/node-server";
-import { streamSSE } from "hono/streaming";
-import { EventEmitter } from "node:events";
+import type { ServerType } from "@hono/node-server";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { readDiagram, writeDiagram } from "./lib/utils/drawio.js";
+import { runAppServer } from "./app-server.js";
+import { runMCPServer } from "./mcp-server.js";
 
-const app = new Hono();
-const ee = new EventEmitter();
+async function main() {
+  let appServer: ServerType;
+  let mcpServer: McpServer;
 
-app.get("/", (c) => {
-  return c.text("Access /drawio to get the diagram.");
-});
+  try {
+    mcpServer = await runMCPServer();
+    appServer = runAppServer();
+  } catch (err) {
+    console.error("Fatal error in main():", err);
+    process.exit(1);
+  }
 
-// GET /drawio - Get file content, create if not exists
-app.get("/drawio", async (c) => {
-  const content = await readDiagram();
-  return c.text(content);
-});
+  const cleanup = async () => {
+    console.error("Shutting down...");
+    if (appServer) appServer.close();
+    if (mcpServer) await mcpServer.close();
+    process.exit(0);
+  };
 
-// POST /drawio - Update content, create if not exists
-app.post("/drawio", async (c) => {
-  const content = await c.req.text();
-  if (!content) return c.json({ error: "Content is required" }, 400);
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+}
 
-  // Write content to file
-  await writeDiagram(content);
-
-  // Notify listeners
-  ee.emit("update", content);
-
-  return c.json({ success: true });
-});
-
-// /drawio/events SSE - Send update events when content changes
-app.get("/drawio/events", async (c) => {
-  return streamSSE(c, async (stream) => {
-    const onUpdate = (content: string) => stream.writeSSE({ data: content, event: "update" });
-
-    // Listen for updates
-    ee.on("update", onUpdate);
-
-    // Clean up listener when connection closes
-    stream.onAbort(() => {
-      ee.off("update", onUpdate);
-    });
-
-    // Keep the connection open
-    while (true) {
-      await stream.sleep(1000);
-    }
-  });
-});
-
-serve({ fetch: app.fetch, port: 3000 }, (info) => console.log(`Server is running on http://localhost:${info.port}`));
+main();
