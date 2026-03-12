@@ -3,72 +3,116 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Drawio Events Listener Demo</title>
+    <title>Drawio Integration</title>
     <style>
       body {
-        font-family: sans-serif;
-        padding: 20px;
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
       }
-      #log {
-        border: 1px solid #ccc;
-        padding: 10px;
-        height: 300px;
-        overflow-y: scroll;
-        background: #f5f5f5;
-      }
-      .event {
-        margin-bottom: 5px;
-        border-bottom: 1px solid #ddd;
-        padding-bottom: 5px;
-      }
-      .timestamp {
-        color: #888;
-        font-size: 0.8em;
+      iframe {
+        border: none;
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>
   <body>
-    <h1>Drawio Events Listener</h1>
-    <p>Listening for updates on <code>/drawio/events</code>...</p>
-
-    <div id="log"></div>
+    <!-- Embed draw.io in iframe -->
+    <iframe
+      id="drawio-iframe"
+      src="https://embed.diagrams.net/?embed=1&ui=min&spin=1&modified=unsavedChanges&proto=json&configure=1&autosave=1"
+    ></iframe>
 
     <script>
-      const logEl = document.getElementById("log");
+      const iframe = document.getElementById("drawio-iframe");
 
-      function log(message, data) {
-        const div = document.createElement("div");
-        div.className = "event";
-        div.innerHTML = `<span class="timestamp">[${new Date().toLocaleTimeString()}]</span> <strong>${message}</strong></pre>`;
-        logEl.prepend(div);
-      }
+      // The server URL (assuming server runs on localhost:3000)
+      const SERVER_URL = "http://localhost:3000/drawio";
 
-      // Connect to the SSE endpoint
-      // The server is mounted at /drawio by app-server.ts
-      // The events route is defined as /events in routes/drawio.ts
-      const eventSource = new EventSource("http://localhost:3000/drawio/events");
+      let currentXml = null;
+
+      // Initialize SSE connection for updates from server
+      // Note: The /events endpoint is relative to /drawio
+      const eventSource = new EventSource(`${SERVER_URL}/events`);
 
       eventSource.onopen = () => {
-        log("Connection opened");
+        console.log("Connected to SSE at " + SERVER_URL + "/events");
       };
 
       eventSource.onerror = (err) => {
-        console.error("EventSource failed:", err);
-        log("Connection error - see console");
+        console.error("SSE Error:", err);
       };
 
-      // Listen for the specific 'update' event defined in the server
       eventSource.addEventListener("update", (event) => {
-        // The data property contains the message payload
-        const data = event.data;
-        console.log("Received update:", data);
-        log(`Update received, length = ${data.length}`);
+        const xml = event.data;
+        if (xml && xml !== currentXml) {
+          console.log("Received update from server");
+          currentXml = xml;
+          // Send to iframe
+          // If the iframe is ready, it will process this.
+          // Otherwise, we store it in currentXml and send on 'init'.
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage(JSON.stringify({ action: "load", xml: currentXml, autosave: 1 }), "*");
+          }
+        }
       });
 
-      // Use 'message' for default messages if any (not used in current server implementation but good practice)
-      eventSource.onmessage = (event) => {
-        log("Message received:", event.data);
-      };
+      // Handle messages from the draw.io iframe
+      window.addEventListener("message", (event) => {
+        // Build URL is variable, we can trust '*' or check origin if known
+        // For simplicity allow all but check if source is our iframe
+        if (event.source !== iframe.contentWindow) return;
+
+        const msg = JSON.parse(event.data);
+
+        switch (msg.event) {
+          case "configure":
+            // Configure draw.io to not compress XML so it's readable
+            iframe.contentWindow.postMessage(
+              JSON.stringify({
+                action: "configure",
+                config: { compressXml: false },
+              }),
+              "*",
+            );
+            break;
+
+          case "init":
+            // Iframe is initialized
+            console.log("Draw.io initialized");
+            if (currentXml) {
+              // Load the current content if available
+              iframe.contentWindow.postMessage(JSON.stringify({ action: "load", xml: currentXml, autosave: 1 }), "*");
+            }
+            break;
+
+          case "save":
+          case "autosave":
+            // User saved or autosave triggered
+            if (msg.xml && msg.xml !== currentXml) {
+              console.log("Saving changes to server...");
+              // Optimistically update local state to avoid echo loop
+              currentXml = msg.xml;
+
+              fetch(SERVER_URL, {
+                method: "POST",
+                body: msg.xml,
+              })
+                .then((res) => {
+                  if (!res.ok) console.error("Save failed", res.statusText);
+                  else console.log("Saved successfully");
+                })
+                .catch((err) => console.error("Error saving:", err));
+            }
+            break;
+
+          default:
+            // console.log("Received event:", msg.event);
+            break;
+        }
+      });
     </script>
   </body>
 </html>
