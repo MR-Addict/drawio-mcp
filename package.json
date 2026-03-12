@@ -1,5 +1,5 @@
 {
-  "name": "drawio",
+  "name": "drawio-mcp",
   "type": "module",
   "scripts": {
     "build": "tsc",

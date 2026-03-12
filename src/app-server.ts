@@ -19,3 +19,7 @@ export function runAppServer() {
     console.error(`Server is running on http://localhost:${info.port}`);
   });
 }
+
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  runAppServer();
+}

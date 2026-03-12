@@ -22,3 +22,7 @@ export async function runMCPServer() {
 
   return server;
 }
+
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  runMCPServer();
+}

@@ -12,10 +12,7 @@ export function registerNotifyTool(server: McpServer) {
       try {
         const content = await readDiagram();
         eventEmitter.emit("update", content);
-
-        return {
-          content: [{ type: "text", text: `Update notification sent.` }],
-        };
+        return { content: [{ type: "text", text: `Update notification sent.` }] };
       } catch (err: any) {
         return {
           content: [{ type: "text", text: `Error processing update: ${err.message}` }],
