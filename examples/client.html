@@ -32,6 +32,7 @@
       const SERVER_URL = "http://localhost:3000/drawio";
 
       let currentXml = null;
+      let saveTimeout = null;
 
       // Initialize SSE connection for updates from server
       // Note: The /events endpoint is relative to /drawio
@@ -92,19 +93,28 @@
           case "autosave":
             // User saved or autosave triggered
             if (msg.xml && msg.xml !== currentXml) {
-              console.log("Saving changes to server...");
-              // Optimistically update local state to avoid echo loop
-              currentXml = msg.xml;
+              if (saveTimeout) clearTimeout(saveTimeout);
+              saveTimeout = setTimeout(async () => {
+                console.log("Saving changes to server...");
+                // Optimistically update local state to avoid echo loop
+                currentXml = msg.xml;
 
-              fetch(SERVER_URL, {
-                method: "POST",
-                body: msg.xml,
-              })
-                .then((res) => {
-                  if (!res.ok) console.error("Save failed", res.statusText);
-                  else console.log("Saved successfully");
-                })
-                .catch((err) => console.error("Error saving:", err));
+                try {
+                  const res = await fetch(SERVER_URL, { method: "POST", body: msg.xml });
+
+                  const success = res.ok;
+                  const message = success ? "Saved" : "Save failed";
+
+                  console.log(message);
+
+                  iframe.contentWindow.postMessage(
+                    JSON.stringify({ action: "status", message, modified: !success }),
+                    "*",
+                  );
+                } catch (err) {
+                  console.error(err);
+                }
+              }, 1000);
             }
             break;
 
